@@ -57,9 +57,15 @@ test('idiomas, datos de usuario, estados y errores funcionan sin base ni red', a
       assert.equal($('#login-form .muted').textContent, t('loginDescription'));
       assert.equal($('#table-form>label').textContent.trim().startsWith(t('name')), true);
     }
+    $('#search').value = 'ТЕРРАСА';
+    $('#search').dispatchEvent(event('input'));
+    assert.equal(document.querySelectorAll('.table-card').length, 2);
+    $('#clear-filters').click();
     const status = $('.card-bottom select');
+    status.focus();
     status.value = 'occupied';
     status.dispatchEvent(event('change'));
+    assert.equal(document.activeElement.id, 'status-1');
     assert.equal($('#occupied').textContent, '3');
     assert.equal($('#ready-summary').textContent, t('readySummary', { tables: 2, seats: 10 }));
     $('#table-name').value = '<img src=x onerror=alert(1)>';

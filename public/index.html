@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reservet · Mesas</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" type="module"></script>
+  </head>
+  <body>
+    <div id="language-controls" class="language-controls">
+      <label class="language-picker">
+        <span id="language-label">Idioma</span>
+        <select id="language" aria-label="Idioma">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+          <option value="ru">Русский</option>
+        </select>
+      </label>
+    </div>
+    <section id="login-screen" class="login-screen" hidden>
+      <aside class="login-story" aria-labelledby="story-title">
+        <a class="brand" href="/" aria-label="Reservet, inicio">
+          <span class="brand-icon">r.</span> reservet
+        </a>
+        <div class="story-copy">
+          <p class="eyebrow" data-i18n="storyEyebrow">EL ARTE DE RECIBIR BIEN</p>
+          <h2 id="story-title" data-i18n="storyTitle">Un salón organizado. Un mejor servicio.</h2>
+          <p data-i18n="storyDescription">
+            Cada detalle está en su lugar. Cada mesa, lista para una nueva historia.
+          </p>
+        </div>
+        <div class="salon-illustration" aria-hidden="true">
+          <div class="floor-caption">reservet / atelier</div>
+          <span class="floor-plant plant-one"></span>
+          <span class="floor-plant plant-two"></span>
+          <div class="floor-table floor-table-one"><i></i><i></i><i></i><i></i><span>01</span></div>
+          <div class="floor-table floor-table-two"><i></i><i></i><span>02</span></div>
+          <div class="floor-table floor-table-three">
+            <i></i><i></i><i></i><i></i><span>03</span>
+          </div>
+          <div class="floor-table floor-table-four"><i></i><i></i><span>04</span></div>
+          <div class="floor-path"></div>
+        </div>
+        <p class="story-footnote" data-i18n="storyFootnote">
+          Menos pendientes. Más momentos compartidos.
+        </p>
+      </aside>
+      <div class="login-form-panel">
+        <form id="login-form" class="login-card">
+          <a class="brand" href="/" aria-label="Reservet, inicio">
+            <span class="brand-icon">r.</span> reservet
+          </a>
+          <p class="eyebrow" data-i18n="loginEyebrow">ACCESO AL RESTAURANTE</p>
+          <h1 data-i18n="loginTitle">Iniciar sesión</h1>
+          <p class="muted" data-i18n="loginDescription">
+            Ingresa tus credenciales para gestionar las mesas.
+          </p>
+
+          <label for="login-username" data-i18n="usernameLabel">Usuario</label>
+          <input
+            id="login-username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            required
+            maxlength="80"
+          />
+
+          <label for="login-password" data-i18n="passwordLabel">Contraseña</label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+
+          <p id="login-error" class="form-error" role="alert" aria-live="polite"></p>
+          <button id="login-submit" class="primary" type="submit" data-i18n="loginButton">
+            Iniciar sesión
+          </button>
+          <p class="login-caption" data-i18n="loginCaption">Tu salón, en buenas manos.</p>
+        </form>
+      </div>
+    </section>
+
+    <div id="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="Reservet, inicio">
+          <span class="brand-icon">r.</span> reservet
+        </a>
+        <p class="eyebrow">TU RESTAURANTE, EN ORDEN</p>
+        <nav aria-label="Navegación principal">
+          <a href="/" aria-current="page"><span>▦</span> Gestión de mesas</a>
+        </nav>
+        <div class="sidebar-note">
+          <span class="small-dot"></span> Espacio de práctica
+          <p>De la primera mesa a una gran experiencia.</p>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <span>Restaurante / <strong>Salón principal</strong></span>
+          <span class="workspace">R <span>Reservet · Desarrollo</span></span>
+          <button id="logout-button" class="secondary" type="button" data-i18n="logoutButton">
+            Cerrar sesión
+          </button>
+        </header>
+
+        <section class="heading">
+          <div>
+            <p class="eyebrow">OPERACIÓN DEL RESTAURANTE</p>
+            <h1 data-i18n="headline">Cada mesa cuenta.</h1>
+            <p>Organiza tu salón y mantén todo listo para recibir.</p>
+          </div>
+          <button class="primary" id="new-table">＋ Nueva mesa</button>
+        </section>
+
+        <section class="connection" aria-label="Fuente de datos">
+          <div>
+            <strong>¿Con qué datos quieres trabajar?</strong>
+            <p id="mode-description">
+              Explora la interfaz con mesas de ejemplo. Los cambios se pierden al recargar.
+            </p>
+          </div>
+          <label class="mode-label">
+            Fuente
+            <select id="source">
+              <option value="demo">Demostración</option>
+              <option value="api">Mi API local</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="stats" aria-label="Resumen del salón">
+          <article>
+            <button class="stat-filter" type="button" data-filter="all" aria-pressed="true">
+              <span>Total de mesas</span>
+              <strong id="total">0</strong>
+              <small>En el salón principal</small>
+            </button>
+          </article>
+          <article>
+            <button class="stat-filter" type="button" data-filter="available" aria-pressed="false">
+              <span><i class="dot available"></i>Disponibles</span>
+              <strong id="available">0</strong>
+              <small>Listas para recibir</small>
+            </button>
+          </article>
+          <article>
+            <button class="stat-filter" type="button" data-filter="occupied" aria-pressed="false">
+              <span><i class="dot occupied"></i>Ocupadas</span>
+              <strong id="occupied">0</strong>
+              <small>Servicio en curso</small>
+            </button>
+          </article>
+          <article>
+            <button
+              class="stat-filter"
+              type="button"
+              data-filter="out_of_service"
+              aria-pressed="false"
+            >
+              <span><i class="dot out_of_service"></i>Fuera de servicio</span>
+              <strong id="out_of_service">0</strong>
+              <small>No disponibles por ahora</small>
+            </button>
+          </article>
+        </section>
+
+        <section class="salon">
+          <div class="section-heading">
+            <div>
+              <h2>Tu salón</h2>
+              <p id="result-count">Vista general de las mesas</p>
+              <p class="salon-help" data-i18n="salonHelp">
+                Selecciona un estado del resumen para filtrar. Cambia el estado de cada mesa desde
+                su tarjeta.
+              </p>
+            </div>
+            <button class="secondary" id="refresh">↻ Actualizar</button>
+          </div>
+
+          <div class="room-readiness">
+            <span class="readiness-icon" aria-hidden="true">↗</span>
+            <div>
+              <strong data-i18n="readinessTitle">Espacio para dar la bienvenida</strong>
+              <p id="ready-summary" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <label class="search">
+              <span>⌕</span>
+              <input
+                id="search"
+                type="search"
+                placeholder="Buscar por nombre…"
+                aria-label="Buscar mesa por nombre"
+              />
+            </label>
+            <label>
+              Estado
+              <select id="filter">
+                <option value="all">Todos los estados</option>
+                <option value="available">Disponibles</option>
+                <option value="occupied">Ocupadas</option>
+                <option value="out_of_service">Fuera de servicio</option>
+              </select>
+            </label>
+            <button
+              id="clear-filters"
+              class="secondary"
+              type="button"
+              data-i18n="clearFilters"
+              hidden
+            >
+              Limpiar filtros
+            </button>
+          </div>
+
+          <p id="notice" class="notice" role="status" aria-live="polite"></p>
+          <div id="tables" class="table-grid" aria-busy="false"></div>
+        </section>
+
+        <footer>
+          <span>Un buen servicio comienza con un salón organizado.</span>
+          <span>Reservet / Mesas <small class="release-version">v0.1.1</small></span>
+        </footer>
+      </main>
+
+      <dialog id="table-dialog" aria-labelledby="dialog-title">
+        <form id="table-form">
+          <div class="dialog-heading">
+            <div>
+              <p class="eyebrow">PREPARA TU SALÓN</p>
+              <h2 id="dialog-title">Una nueva mesa</h2>
+            </div>
+            <button type="button" class="close" id="close-dialog" aria-label="Cerrar">×</button>
+          </div>
+
+          <p class="muted">Añade una mesa para comenzar a gestionarla.</p>
+
+          <label>
+            Nombre de la mesa
+            <input
+              id="table-name"
+              name="name"
+              required
+              maxlength="80"
+              placeholder="Ej. Terraza 01"
+              autocomplete="off"
+            />
+          </label>
+
+          <label>
+            Capacidad
+            <input
+              id="table-capacity"
+              name="capacity"
+              type="number"
+              min="1"
+              max="20"
+              step="1"
+              value="4"
+              required
+            />
+          </label>
+
+          <p class="hint">Entre 1 y 20 personas. Se creará como disponible.</p>
+          <p id="form-error" role="alert" class="form-error"></p>
+
+          <div class="dialog-actions">
+            <button type="button" class="secondary" id="cancel-dialog">Cancelar</button>
+            <button type="submit" class="primary" id="save-table">Crear mesa</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  </body>
+</html>

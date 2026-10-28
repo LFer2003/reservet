@@ -1,0 +1,9 @@
+# Copy outside the repository and replace the tunnel UUID and credential path.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: 'C:\Users\Eddier\.cloudflared\REPLACE_WITH_TUNNEL_UUID.json'
+ingress:
+  - hostname: reservet-dev.log14.com
+    service: http://127.0.0.1:3100
+  - hostname: reservet.log14.com
+    service: http://127.0.0.1:3200
+  - service: http_status:404

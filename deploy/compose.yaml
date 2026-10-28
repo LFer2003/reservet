@@ -1,0 +1,49 @@
+# Always select a project explicitly: reservet-dev or reservet-pro.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?Missing DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Missing DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:?Missing DB_NAME}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      # initdb starts a temporary socket-only server; check TCP to wait for the final server.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks: [database]
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+  app:
+    image: ${APP_IMAGE:?Missing APP_IMAGE}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    environment:
+      NODE_ENV: production
+      APP_ENV: ${APP_ENV:?Missing APP_ENV}
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    ports:
+      - '127.0.0.1:${APP_PORT:?Missing APP_PORT}:3000'
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [database, web]
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+volumes:
+  database:
+networks:
+  database:
+    internal: true
+  web:

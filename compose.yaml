@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: reservet
+      POSTGRES_PASSWORD: reservet_local
+      POSTGRES_DB: reservet
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U reservet -d reservet']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  postgres_data:

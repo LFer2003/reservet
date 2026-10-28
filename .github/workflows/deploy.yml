@@ -1,0 +1,78 @@
+name: Deploy to this PC
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Candidate copies run CI, but never need or access our server's runner.
+    if: github.repository == 'Eddierh/reservet' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Test deployment failure handling without Docker or secrets
+        shell: pwsh
+        run: ./tests/deploy.test.ps1
+      - name: Verify real PostgreSQL migrations and build the deployment image
+        run: |
+          docker build --pull -t reservet:${GITHUB_SHA} .
+          export APP_IMAGE=reservet:${GITHUB_SHA}
+          export APP_ENV=dev APP_PORT=3100 DB_USER=ci DB_NAME=ci DB_PASSWORD=ci_only
+          docker compose -p reservet-ci -f deploy/compose.yaml up -d --wait db
+          docker compose -p reservet-ci -f deploy/compose.yaml run --rm app node build/scripts/migrate.js
+          docker compose -p reservet-ci -f deploy/compose.yaml run --rm app node build/scripts/migrate.js
+          docker compose -p reservet-ci -f deploy/compose.yaml up -d --wait app
+          curl --fail http://127.0.0.1:3100/health/db
+          curl --fail http://127.0.0.1:3100/ > /dev/null
+          docker save reservet:${GITHUB_SHA} -o reservet-image.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reservet-${{ github.sha }}
+          path: reservet-image.tar
+          retention-days: 7
+  deploy:
+    needs: verify
+    runs-on: [self-hosted, Windows, X64, reservet-server]
+    environment: ${{ github.ref == 'refs/heads/main' && 'pro' || 'dev' }}
+    concurrency:
+      group: reservet-${{ github.ref == 'refs/heads/main' && 'pro' || 'dev' }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject deployments superseded by a newer branch commit
+        env:
+          DEPLOY_REF: ${{ github.ref }}
+          REVISION: ${{ github.sha }}
+        run: |
+          $remoteHead = git ls-remote origin $env:DEPLOY_REF
+          if ($LASTEXITCODE -ne 0 -or -not $remoteHead) { throw 'Could not verify branch head.' }
+          if (($remoteHead -split '\s+')[0] -ne $env:REVISION) { throw 'A newer commit superseded this deployment. Deploy the latest workflow run.' }
+      - uses: actions/download-artifact@v4
+        with:
+          name: reservet-${{ github.sha }}
+          path: ${{ runner.temp }}/reservet-${{ github.sha }}
+      - name: Load the image tested on GitHub
+        env:
+          IMAGE_PATH: ${{ runner.temp }}/reservet-${{ github.sha }}/reservet-image.tar
+        run: |
+          docker load --input "$env:IMAGE_PATH"
+          if ($LASTEXITCODE -ne 0) { throw 'Docker image load failed.' }
+      - name: Deploy isolated environment
+        env:
+          TARGET_ENV: ${{ github.ref == 'refs/heads/main' && 'pro' || 'dev' }}
+          REVISION: ${{ github.sha }}
+          SERVER_ROOT: ${{ vars.RESERVET_SERVER_ROOT || 'E:\reservet-server' }}
+        run: ./deploy/Deploy.ps1 -Environment $env:TARGET_ENV -Revision $env:REVISION -ServerRoot $env:SERVER_ROOT

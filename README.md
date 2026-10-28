@@ -1,62 +1,56 @@
-# Reservet · Prueba técnica junior
-
-## Solución implementada e instrucciones de entrega
-
-La aplicación implementa autenticación con sesiones PostgreSQL, contraseñas con
-scrypt y gestión de mesas protegida. Consulta [Ejecución, decisiones y revisión](docs/ENTREGA.md)
-para instalar, generar tu usuario local, ejecutar todas las pruebas y preparar la entrega.
-El enunciado original se conserva a continuación como referencia del alcance.
+# Reservet · Gestión de mesas
 
 **Español** · [English](README.en.md) · [Русский](README.ru.md)
 
-Completa una aplicación para el personal de un restaurante: **login, gestión de
-mesas y persistencia en PostgreSQL**. Trabaja localmente, publica la solución en
-**tu propio GitHub** y entrega la URL con instrucciones reproducibles.
+Aplicación para personal de restaurante con inicio de sesión, gestión de mesas y
+persistencia en PostgreSQL. Solución de la prueba técnica junior de Reservet.
 
-Este README define el alcance obligatorio. El plazo lo comunica el evaluador;
-documenta cualquier tarea incompleta. Las etapas adicionales de las guías no
-forman parte de esta prueba.
+[Repositorio](https://github.com/LFer2003/reservet) ·
+[Verificaciones en GitHub](https://github.com/LFer2003/reservet/actions/workflows/ci.yml) ·
+[Decisiones y registro de problemas](docs/ENTREGA.md) · [Verificación de entrega](docs/VERIFICACION.md) · [Enunciado original](docs/ENUNCIADO.md)
 
-## 1. Punto de partida y alcance
+## Funcionalidades
 
-Incluido: TypeScript/Express, conexión y migraciones PostgreSQL, esquema de mesas,
-interfaz en español/inglés/ruso con modo demo/API y pruebas básicas.
+- Login, consulta de sesión y logout con revocación en el servidor.
+- Contraseñas con scrypt y sesiones PostgreSQL con caducidad de ocho horas.
+- Listado y creación de mesas; estados disponible, ocupada y fuera de servicio.
+- Búsqueda sin distinguir mayúsculas, filtros desde el resumen y limpieza de filtros.
+- Tarjetas compactas con nombre, capacidad, estado y control para cambiarlo.
+- Resumen de mesas y plazas disponibles, interfaz adaptable e idiomas español, inglés y ruso.
+- Modo API con persistencia y modo demostración con datos temporales.
 
-Debes implementar autenticación, proteger los endpoints de mesas, listar/crear/
-cambiar estados, conectar la interfaz, añadir pruebas y documentar tu solución.
-El login todavía no existe: debes construirlo.
+## Cambios realizados
 
-**No se requiere Docker, AWS/SQS, Cloudflare, runner, dominios ni deployment.**
-Tampoco reservas, pagos, inventario o recuperación de contraseña. La infraestructura
-del repositorio original la administra el evaluador, no el candidato.
+El punto de partida incluía la interfaz y el esquema de mesas. Sobre esa base se
+implementaron tres partes:
 
-## 2. Tu repositorio
+- **Acceso:** usuarios, seed repetible, login, sesión actual y logout. La protección
+  se aplica en el servidor a todas las rutas de mesas.
+- **Gestión de mesas:** listado, creación y cambio de estado conectados a PostgreSQL,
+  con validaciones y respuestas para datos incorrectos, duplicados y mesas inexistentes.
+- **Interfaz y pruebas:** separación del login y el panel, traducciones corregidas,
+  preferencia de idioma al recargar, filtros desde el resumen y tarjetas compactas.
+  Se añadieron regresiones de interfaz y pruebas con PostgreSQL real.
 
-Crea un repositorio vacío en tu GitHub, sin generar otro README. Conserva el
-historial del proyecto y cambia el destino de tus pushes:
+## Ejecución local
+
+Requisitos: Git, Node.js 22.13 o superior compatible, npm y PostgreSQL 17.
+No se necesita Docker ni desplegar la aplicación.
+
+### 1. Clonar e instalar
 
 ```powershell
-git clone https://github.com/Eddierh/reservet.git reservet-prueba
-cd reservet-prueba
-git remote rename origin upstream
-git remote add origin https://github.com/TU_USUARIO/reservet-prueba-tecnica.git
-git push -u origin main
-git switch -c feat/technical-test
+git clone https://github.com/LFer2003/reservet.git
+cd reservet
+npm ci
+Copy-Item .env.example .env
 ```
 
-Sustituye `TU_USUARIO` y el nombre por los tuyos. Haz commits pequeños en tu rama.
-No envíes cambios ni PR al repositorio original. Si tu repo es privado, concede
-acceso al evaluador antes de entregar.
+Si ya existe `.env`, consérvalo y ajusta sus valores sin sobrescribirlo.
 
-## 3. Preparación local sin Docker
+### 2. Preparar PostgreSQL
 
-Instala Git, Node.js **22.13 o superior compatible con las dependencias** y
-PostgreSQL **17** directamente en tu equipo. Comprueba `git --version`,
-`node --version`, `npm --version` y `psql --version`. Si `psql` no está en PATH,
-usa SQL Shell o la herramienta de consultas de pgAdmin.
-
-Conéctate a tu PostgreSQL como administrador y ejecuta estas sentencias **por
-separado**, con autocommit activado; CREATE DATABASE no admite una transacción:
+Como administrador, ejecuta estas sentencias **por separado**, con autocommit:
 
 ```sql
 CREATE ROLE reservet_candidate LOGIN PASSWORD 'local_candidate_password';
@@ -64,200 +58,117 @@ CREATE DATABASE reservet_candidate OWNER reservet_candidate;
 CREATE DATABASE reservet_candidate_test OWNER reservet_candidate;
 ```
 
-Usa nombres diferentes si ya existen. El usuario de la app no necesita ser
-superusuario. La base `_test` es exclusiva para pruebas. No te conectes a las
-bases dev/pro del proyecto original.
+Son credenciales de ejemplo para uso local. El usuario de la aplicación no necesita
+ser superusuario. Cambia los valores si ya existen esos nombres.
 
-```powershell
-npm ci
-# Solo si aún no existe .env:
-Copy-Item .env.example .env
-```
+### 3. Configurar variables
 
-Ajusta `.env` a tu instalación:
+Ajusta `.env` a tu usuario, contraseña, puerto y nombres reales:
 
 ```dotenv
 PORT=3000
+HOST=127.0.0.1
+APP_ENV=dev
 DATABASE_URL=postgresql://reservet_candidate:local_candidate_password@localhost:5432/reservet_candidate
+TEST_DATABASE_URL=postgresql://reservet_candidate:local_candidate_password@localhost:5432/reservet_candidate_test
 ```
 
-El ejemplo original usa **5433** para Docker; una instalación directa suele usar
-**5432**. Usa tu puerto real y codifica los caracteres especiales de la contraseña
-para una URL. No subas `.env` ni credenciales reales.
+Codifica caracteres especiales de la contraseña para una URL. `.env` está excluido
+de Git. `TEST_DATABASE_URL` debe usar una base exclusiva, distinta de la principal,
+cuyo nombre termine en `_test`.
+
+### 4. Migrar y generar el usuario local
 
 ```powershell
 npm run db:migrate
+$env:SEED_USERNAME = 'demo'
+$env:SEED_PASSWORD = Read-Host 'Elige una contraseña local de al menos 12 caracteres'
+npm run db:seed-user
+Remove-Item Env:SEED_PASSWORD
 npm run dev
 ```
 
-Abre **http://localhost:3000** y, en otra terminal, comprueba:
+El seed es repetible: crea el usuario o actualiza su contraseña. No hay registro
+público ni una contraseña universal incluida en el repositorio.
+
+Abre [http://localhost:3000](http://localhost:3000), inicia sesión con tu usuario y
+selecciona **Mi API local** para probar la persistencia. **Demostración** guarda
+cambios únicamente en memoria y los pierde al recargar; no demuestra el backend.
 
 ```powershell
 Invoke-RestMethod http://localhost:3000/health
 Invoke-RestMethod http://localhost:3000/health/db
 ```
 
-Espera `status: ok` y `database: connected`. Selecciona **Mi API local** para
-probar tu backend. Inicialmente `/api/tables` devuelve 404: debes implementarlo.
-El modo demo solo guarda en memoria y no demuestra persistencia. No uses
-`npm run db:up` ni `npm run db:down`: son comandos para Docker.
+Resultados esperados: `status: ok` y `database: connected`. Para ejecutar el código
+compilado, usa `npm run build` y después `npm start`.
 
-## 4. Tareas obligatorias
-
-### A. Autenticación
-
-- Agrega migraciones de usuarios y un seed o procedimiento repetible para crear
-  un usuario de prueba. No incluyas contraseñas reales en Git.
-- Implementa login, logout y consulta de sesión actual. Puedes elegir sesión o
-  token: explica tu decisión, caducidad y comportamiento de revocación al salir.
-- Guarda contraseñas con scrypt, bcrypt o Argon2; nunca en texto plano ni con
-  SHA-256 simple. Login incorrecto: 401 y mensaje genérico.
-- Protege en el **servidor** todos los endpoints de mesas: sin autenticación deben
-  responder 401. Ocultar botones no es protección suficiente.
-- Crea la pantalla de login y la acción de salir; conserva los tres idiomas y
-  el selector. No se exige registro público, correo ni roles avanzados.
-- Documenta nuevas variables con ejemplos en `.env.example`. Las rutas de salud
-  pueden seguir públicas, sin revelar secretos.
-
-### B. API de mesas
-
-| Método y ruta                  | Entrada                               | Resultado                                |
-| ------------------------------ | ------------------------------------- | ---------------------------------------- |
-| `GET /api/tables`              | Sin cuerpo                            | 200 y array de mesas                     |
-| `POST /api/tables`             | `{ "name": "Mesa 1", "capacity": 4 }` | 201 y mesa creada con estado `available` |
-| `PATCH /api/tables/:id/status` | `{ "status": "occupied" }`            | 200 y mesa completa actualizada          |
-
-Cada mesa incluye `id` entero positivo, `name`, `capacity` entera y `status`.
-Valida nombre no vacío de hasta 80 caracteres, capacidad de **1 a 20**, ID
-positivo y estados `available`, `occupied`, `out_of_service`.
-
-Datos inválidos: **400**; mesa inexistente: **404**; nombre duplicado: **409**;
-sin autenticación: **401**. Usa SQL parametrizado y restricciones de base de datos.
-No devuelvas consultas, contraseñas ni stacks al cliente.
-
-### C. Arquitectura e interfaz
-
-- Divide el módulo en rutas, servicio y repositorio; separa HTTP, negocio y SQL.
-- Agrega migraciones nuevas, sin modificar las ya aplicadas. La solución debe
-  funcionar con una base vacía y los comandos documentados, sin cambios ocultos.
-- Conecta el listado, formulario, filtros y cambio de estado de la interfaz.
-  Muestra carga y errores, evita envíos repetidos e inserta texto externo de
-  forma segura. Valida en servidor aunque el navegador ya valide.
-- Comprueba que las mesas del modo API sobreviven a recargar y reiniciar el
-  servidor. El modo demo no debe ocultar errores de tu backend.
-- Si usas cookies, conserva el mismo origen y documenta sus opciones de seguridad.
-- La búsqueda debe ignorar mayúsculas/minúsculas y el idioma elegido debe
-  conservarse al recargar.
-
-### D. Pruebas y calidad
-
-Incluye pruebas de login correcto/incorrecto, acceso sin sesión, logout según tu
-mecanismo, crear/listar/cambiar estado, validaciones, duplicados y mesa inexistente.
-Comprueba persistencia contra la base `_test`, nunca borrando datos de trabajo.
-
-Las pruebas incluidas usan mocks/JSDOM y no cubren tu backend de negocio.
-Documenta cómo configurar y migrar la base de pruebas, sus comandos y qué está
-simulado. Si necesitas `TEST_DATABASE_URL`, explícalo y prepara una base temporal
-para las pruebas de integración en tu CI. No desactives comprobaciones existentes.
+## Pruebas
 
 ```powershell
-npm run format
 npm run check
+npm run test:integration
 ```
 
-`check` ejecuta lint, formato, tipos, pruebas y compilación. **Verificaciones** debe
-pasar en tu GitHub. El deployment está reservado al repositorio original y se
-omite en las copias: no necesitas instalar un runner.
+| Comando                    | Qué comprueba                                                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`            | ESLint, Prettier, tipos, pruebas de configuración/HTTP/UI y compilación.                                                   |
+| `npm test`                 | Pruebas sin PostgreSQL real: JSDOM y fetch simulado; mocks para consultas de salud.                                        |
+| `npm run test:integration` | Peticiones HTTP y PostgreSQL real en la base `_test`: autenticación, mesas, errores, revocación, caducidad y persistencia. |
 
-## 5. Orden de trabajo y publicación
+La integración crea un esquema aleatorio, aplica las migraciones y elimina solo
+ese esquema al terminar; no trunca tablas existentes. Su usuario necesita permiso
+para crear esquemas. No hay que migrar previamente la base de pruebas.
 
-1. Prepara PostgreSQL y comprueba `/health/db`.
-2. Implementa y prueba mesas en tu rama.
-3. Agrega usuarios, seed, login y protección del módulo.
-4. Conecta la interfaz, verifica los tres idiomas y completa pruebas.
-5. Ejecuta las verificaciones y prueba tus instrucciones desde cero.
-6. Sube tu rama, abre un PR **en tu propio repo**, revísalo e intégralo a su rama
-   por defecto para que la solución final sea fácil de encontrar.
+GitHub Actions prepara PostgreSQL 17 temporal y ejecuta ambas suites, además de las
+comprobaciones existentes. Los resultados están en
+[Verificaciones](https://github.com/LFer2003/reservet/actions/workflows/ci.yml).
 
-```powershell
-git add <archivos-de-tu-cambio>
-git commit -m "feat: describe el cambio implementado"
-git push -u origin feat/technical-test
-```
+## Arquitectura y seguridad
 
-## 6. Evaluación
+`public/` contiene la interfaz. `src/modules/auth/` y `src/modules/tables/` separan
+rutas HTTP, servicios de negocio y repositorios SQL. `migrations/` contiene el
+esquema y `scripts/` las migraciones y el seed.
 
-### Uso de IA y explicación de la entrega
+El login verifica scrypt y genera un token aleatorio. PostgreSQL guarda su hash;
+el navegador recibe una cookie `HttpOnly`, `SameSite=Lax`, con caducidad de ocho
+horas. `Secure` se activa con `APP_ENV=pro`; desarrollo local usa HTTP y mismo origen.
+Cada petición de mesas valida la sesión antes de acceder al servicio y al repositorio.
+Salir elimina la sesión del servidor y la cookie. No se almacenan tokens en localStorage.
 
-- **Puedes usar IA para programar, investigar, depurar y escribir pruebas.**
-  Indica las herramientas utilizadas y en qué partes te ayudaron.
-- Eres responsable de comprender, revisar y verificar todo el código entregado,
-  también el generado. No compartas secretos ni datos personales con herramientas.
-- Incluye una explicación escrita del flujo login → petición autenticada →
-  servicio → PostgreSQL, de tus decisiones y de cómo verificaste el resultado.
-- Describe una sugerencia de IA que corregiste o descartaste y por qué. Si no
-  ocurrió, explica una decisión que contrastaste con documentación o pruebas.
-- No pedimos el historial completo de conversaciones. Un vídeo explicativo es
-  opcional; **no habrá ejercicios de programación ni cambios en vivo con el evaluador**.
+El servidor valida entradas, usa SQL parametrizado y restricciones de base de datos.
+Los nombres externos se insertan con `textContent`; los errores internos no exponen
+SQL ni stacks. Los contratos completos y las regresiones están en [la guía](docs/ENTREGA.md).
 
-### Revisión del código inicial
+## Decisiones técnicas
 
-El código entregado es un punto de partida y puede contener defectos funcionales.
-Revisarlo y corregir lo que detectes forma parte de la prueba. Las comprobaciones
-incluidas no garantizan que todos los comportamientos sean correctos: amplía las
-pruebas sin desactivar las existentes.
+Elegí sesiones persistentes para poder revocar el acceso al cerrar sesión y
+conservarlo después de reiniciar el servidor. La contraseña se deriva con scrypt;
+SHA-256 se usa únicamente para guardar el hash del token aleatorio de sesión.
 
-No te limites al caso feliz: revisa límites, errores y comportamientos después de
-recargar. Para cada problema encontrado, documenta **síntoma, reproducción, causa,
-corrección y prueba de regresión**.
-No basta con afirmar que una IA lo arregló: explica la causa y la evidencia.
+En la interfaz prioricé la operación del salón: el nombre, la capacidad y el estado
+se leen juntos. El resumen sirve también como filtro. Los dibujos de mesas se
+sustituyeron por tarjetas más compactas porque ocupaban espacio sin facilitar el uso.
 
-### Criterios
+El flujo de una petición es: **formulario → ruta HTTP → servicio → repositorio →
+PostgreSQL**. El middleware comprueba la sesión antes de permitir las operaciones
+de mesas. El [registro de cambios y errores](docs/ENTREGA.md) explica las causas y
+las pruebas de regresión.
 
-| Criterio       | Evidencia                                                                   |
-| -------------- | --------------------------------------------------------------------------- |
-| Funcionamiento | Login y mesas con PostgreSQL real                                           |
-| Diseño         | Responsabilidades claras y decisiones explicadas                            |
-| Seguridad      | Hash de contraseñas, protección del backend, validación y SQL parametrizado |
-| Pruebas        | Casos correctos, errores y persistencia reproducibles                       |
-| Entrega        | Commits comprensibles, CI correcta e instrucciones completas                |
+## Uso de IA
 
-Debes poder explicar tu código y las herramientas o ayudas utilizadas. Reservas,
-SQS, microservicios y deployment no son requisitos ni sustituyen tareas obligatorias.
+Utilicé Codex como apoyo para revisar código, depurar el login, explorar el diseño,
+ampliar pruebas y organizar la documentación. Las decisiones se contrastaron con
+el comportamiento de la aplicación y las pruebas automatizadas.
 
-## 7. Entrega al evaluador
+Una decisión que corregí fue ocultar el panel aunque fallara la petición de logout:
+eso no confirma que la sesión se haya revocado. Ahora se muestra el error y se
+permite reintentar; la prueba de interfaz cubre tanto el fallo como el cierre correcto.
 
-Envía por el mismo canal en que recibiste la prueba:
+## Alcance
 
-- **URL de tu repositorio**, accesible al evaluador, rama final y SHA a revisar.
-- URL del PR de tu repo y de una ejecución correcta de CI.
-- Un README con instalación, PostgreSQL, variables, migraciones, seed, arranque
-  y comandos para todas las pruebas.
-- Credenciales **solo de demostración local**, o el procedimiento para generarlas;
-  nunca claves personales ni secretos de otros ambientes.
-- Decisiones, pendientes y limitaciones. Capturas o vídeo son opcionales y no
-  sustituyen código e instrucciones.
-- Una sección de uso de IA y un registro de problemas encontrados con su explicación
-  y las pruebas que añadiste.
-
-```text
-Repositorio: https://github.com/TU_USUARIO/reservet-prueba-tecnica
-Rama final y commit:
-Pull request:
-CI:
-Instrucciones de ejecución: sección de mi README
-Usuario de prueba: procedimiento de seed documentado
-Completado / pendiente:
-```
-
-Antes de entregar, clona tu repo en otra carpeta y sigue tus propias instrucciones.
-La revisión no debe depender de tu `.env`, archivos fuera del repo o acceso a nuestra PC.
-
-## Referencias y administración
-
-[Arquitectura](docs/ARQUITECTURA.md) · [Contribución](CONTRIBUTING.md) ·
-[Guía de aprendizaje](docs/GUIA_JUNIOR.md).
-Las etapas de reservas/SQS son formación futura. Algunas guías históricas usan
-Docker: para esta prueba sigue la preparación local de este README.
-La [guía de deployment para tus proyectos](docs/DEPLOYMENT.md) es aprendizaje
-opcional: usa tus propios recursos y no forma parte de la entrega.
+La solución se centra en autenticación y gestión de mesas. Reservas, pagos,
+inventario, recuperación de contraseña y despliegue no forman parte de esta prueba.
+El detalle de seguridad, las limitaciones técnicas y la evidencia de validación
+están en [la documentación de entrega](docs/ENTREGA.md) y en el
+[informe de verificación](docs/VERIFICACION.md).

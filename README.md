@@ -19,6 +19,12 @@ persistencia en PostgreSQL. Solución de la prueba técnica junior de Reservet.
 - Resumen de mesas y plazas disponibles, interfaz adaptable e idiomas español, inglés y ruso.
 - Modo API con persistencia y modo demostración con datos temporales.
 
+## Vista previa
+
+![Panel de mesas en modo API](docs/screenshots/panel-desktop.jpg)
+
+[Vista móvil](docs/screenshots/panel-mobile.jpg). Capturas con datos ficticios en una base de pruebas.
+
 ## Cambios realizados
 
 El punto de partida incluía la interfaz y el esquema de mesas. Sobre esa base se

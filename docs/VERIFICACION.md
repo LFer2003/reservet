@@ -35,16 +35,19 @@ Las pruebas usaron exclusivamente esquemas temporales de la base `_test`.
 | Uso de IA y registro de problemas          | README y `docs/ENTREGA.md`, con causa, corrección y prueba de regresión.                                      |
 | Variables e instrucciones                  | `.env.example`, README y procedimiento de seed; `.env` no está versionado.                                    |
 
-## Alcance de las verificaciones de interfaz
+## Revisión de interfaz
 
-La suite JSDOM comprueba los flujos de login, cambio de idioma, creación, estados,
-filtros, errores, caducidad y logout. También comprueba que el foco de teclado se
-conserva al cambiar el estado de una mesa que continúa visible.
+Se revisó el panel compacto actual en navegador con PostgreSQL real en un esquema
+exclusivo de pruebas. Se verificaron login, selección de API, filtros del resumen,
+limpieza de filtros, creación de mesa, cambio de estado, actualización del listado
+y logout. Se comprobó la navegación con Tab desde búsqueda hasta el filtro.
 
-Se revisó en navegador una versión anterior del login y del panel, a 1440 px y
-390 px. La reorganización posterior de tarjetas compactas está cubierta por pruebas
-automáticas, pero su revisión visual manual no se completó por un fallo de las
-herramientas de navegador. No se atribuye esa revisión a la versión actual.
+El panel se revisó a 1440 px en escritorio y 390 px en móvil, con español, inglés
+y ruso. No se observó desbordamiento horizontal. Las capturas utilizan datos
+ficticios; el usuario y el esquema de prueba se retiraron al terminar.
+
+- [Panel de escritorio](screenshots/panel-desktop.jpg).
+- [Panel móvil en ruso](screenshots/panel-mobile.jpg).
 
 ## Evidencia publicada
 
@@ -55,20 +58,33 @@ es accesible públicamente y su rama predeterminada es `main`.
 - [Verificaciones: ejecución correcta](https://github.com/LFer2003/reservet/actions/runs/40767931435).
 - [Deployment omitido](https://github.com/LFer2003/reservet/actions/runs/40767931480), conforme al alcance de las copias del candidato.
 
-La ejecución verde corresponde a ese commit; los cambios locales de esta revisión
-necesitan su propio commit y una nueva ejecución de CI para quedar cubiertos en GitHub.
+Esa ejecución documenta el primer commit publicado. Los resultados del PR de entrega se consultan en [Verificaciones](https://github.com/LFer2003/reservet/actions/workflows/ci.yml).
 
-## Requisitos formales de publicación
+## Historial y publicación
 
-La revisión del código no sustituye estas condiciones del enunciado:
+El historial original se incorporó mediante el merge
+`e20407556d676dcb1ccd02d485e05b68f801900b`, que conecta el trabajo publicado con
+`upstream/main` (`4c94597`). Se resolvieron los conflictos conservando la solución
+revisada; no se reescribió el historial publicado ni se modificó el repositorio del evaluador.
 
-- El historial local parte de un commit inicial propio, en vez de conservar el
-  historial del repositorio original. Debe resolverse antes de afirmar cumplimiento
-  completo de ese requisito; esta revisión no reescribió el historial publicado.
-- La consulta de PR del repositorio no mostró un PR de entrega. El enunciado pide
-  un PR propio, revisado e integrado a la rama final.
-- La entrega debe indicar rama y SHA finales, enlace al PR y CI correspondiente.
-- Conviene completar la revisión visual del panel compacto en escritorio y móvil.
+Se comprobó con `git merge-base --is-ancestor` que tanto `upstream/main` como el
+`main` publicado son antecesores de la rama de entrega.
+
+El [PR #1](https://github.com/LFer2003/reservet/pull/1) reúne las pruebas finales,
+la documentación y la integración del historial. La rama de revisión es
+`codex/entrega-final` y la rama de entrega es `main`.
+
+Para identificar el commit final después de integrar el PR:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+git rev-parse HEAD
+```
+
+Los enlaces al PR y a Verificaciones permiten consultar la evidencia publicada y
+el SHA de cada ejecución. La revisión local y las capturas corresponden al código
+incluido en este PR.
 
 ## Cómo repetir la revisión
 

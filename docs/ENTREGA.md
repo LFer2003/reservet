@@ -1,142 +1,124 @@
-# Ejecución y revisión de la solución
+# Decisiones y cambios de la solución
 
-## Preparación local
+Las instrucciones de instalación están en el [README](../README.md). Este documento
+explica la implementación y los errores corregidos. La evidencia de la revisión
+final se recoge en [Verificación de entrega](VERIFICACION.md).
 
-Requisitos: Node.js 22.13 o superior compatible, npm y PostgreSQL 17. No requiere Docker.
-Desde pgAdmin o psql, como administrador, ejecuta por separado:
+## Del login a PostgreSQL
 
-```sql
-CREATE ROLE reservet_candidate LOGIN PASSWORD 'local_candidate_password';
-CREATE DATABASE reservet_candidate OWNER reservet_candidate;
-CREATE DATABASE reservet_candidate_test OWNER reservet_candidate;
-```
+1. El formulario envía usuario y contraseña a `POST /api/auth/login`.
+2. La ruta valida el cuerpo y llama al servicio de autenticación.
+3. El repositorio busca al usuario con una consulta parametrizada. El servicio
+   deriva la contraseña con scrypt y compara el resultado con `timingSafeEqual`.
+4. Si coincide, se genera un token aleatorio de 32 bytes. PostgreSQL almacena su
+   hash SHA-256 y la fecha de caducidad; la contraseña nunca se guarda con SHA-256 simple.
+5. El navegador recibe `reservet_session`, una cookie `HttpOnly`, `SameSite=Lax`,
+   `Path=/`, con una duración de ocho horas. `Secure` se activa con `APP_ENV=pro`;
+   el desarrollo local usa HTTP y mismo origen.
+6. En una petición de mesas, el middleware verifica la sesión. La ruta HTTP delega
+   la validación al servicio y las consultas al repositorio.
+7. Al salir, se elimina la sesión en PostgreSQL y se borra la cookie. Reutilizar
+   el token responde 401. Una sesión caducada tampoco permite acceder a mesas.
 
-Estas credenciales son ejemplos locales. Cambia la contraseña en tu instalación y
-codifica caracteres especiales en las URL. En PowerShell, desde la raíz:
+Las sesiones persistentes permiten conservar el acceso entre reinicios y revocarlo
+al salir. El token no se guarda en localStorage; allí solo se conserva el idioma.
 
-```powershell
-npm ci
-# Solo si no tienes .env:
-Copy-Item .env.example .env
-# Ajusta DATABASE_URL y TEST_DATABASE_URL en .env al usuario, puerto y bases reales.
-npm run db:migrate
-$env:SEED_USERNAME = 'demo'
-$env:SEED_PASSWORD = Read-Host 'Contraseña de demostración local (mínimo 12 caracteres)'
-npm run db:seed-user
-Remove-Item Env:SEED_PASSWORD
-npm run dev
-```
+## Organización
 
-Abre http://localhost:3000 e inicia sesión con las credenciales que acabas de generar.
-El seed se puede repetir: actualiza la contraseña del usuario indicado. No publiques
-tu `.env`. Para comprobar la base usa `/health/db` (debe indicar `connected`).
-Selecciona **Mi API local** para comprobar PostgreSQL. Demostración usa datos en
-memoria y sus cambios se pierden al recargar; no sustituye la verificación del backend.
+| Ubicación             | Responsabilidad                                             |
+| --------------------- | ----------------------------------------------------------- |
+| `public/`             | Formularios, eventos, presentación y traducciones.          |
+| `src/modules/auth/`   | Rutas, servicio, repositorio y middleware de autenticación. |
+| `src/modules/tables/` | Contratos HTTP, validaciones de negocio y SQL de mesas.     |
+| `src/shared/`         | Configuración y conexión PostgreSQL.                        |
+| `migrations/`         | Esquema de mesas, usuarios y sesiones.                      |
+| `scripts/`            | Aplicación de migraciones y creación del usuario local.     |
+| `tests/`              | Pruebas de configuración, HTTP, interfaz e integración.     |
 
-## Flujo y decisiones
+Las migraciones se registran en `schema_migrations`. Cada archivo y su registro se
+confirman en una transacción; un advisory lock evita que dos ejecuciones migren a
+la vez. El seed es repetible y actualiza la contraseña del usuario indicado.
 
-1. El formulario envía usuario y contraseña a `POST /api/auth/login` en el mismo origen.
-2. La ruta valida el cuerpo y llama al servicio. El repositorio consulta al usuario
-   mediante SQL parametrizado. El servicio compara el hash scrypt con `timingSafeEqual`.
-3. Se genera un token aleatorio de 32 bytes y se guarda únicamente su hash SHA-256
-   en PostgreSQL. SHA-256 se usa para el token aleatorio, nunca para contraseñas.
-4. El navegador recibe la cookie `reservet_session`, `HttpOnly`, `SameSite=Lax`,
-   `Path=/`, con duración de ocho horas. `Secure` se activa con `APP_ENV=pro`;
-   desarrollo local usa HTTP. `GET /api/auth/me` recupera la sesión al recargar.
-5. Cada petición de mesas pasa por el middleware de autenticación. La ruta delega
-   en el servicio las validaciones y en el repositorio las operaciones SQL.
-6. `POST /api/auth/logout` borra la sesión del servidor y elimina la cookie.
-   Reutilizar el token revocado responde 401. Un fallo de red al salir se muestra
-   como error y permite reintentar. Las sesiones caducadas también responden 401.
+## Contrato de mesas
 
-Se eligieron sesiones persistentes para permitir revocación inmediata y conservar
-el acceso al reiniciar el proceso, sin almacenar tokens en localStorage. Las tablas
-tienen restricciones de nombre único, capacidad y estado. Los textos externos se
-insertan con `textContent`. Los errores internos no exponen SQL ni stacks al cliente.
+Todas las rutas requieren una sesión válida.
 
-## Pruebas reproducibles
+| Método y ruta                  | Entrada            | Resultado                           |
+| ------------------------------ | ------------------ | ----------------------------------- |
+| `GET /api/tables`              | Sin cuerpo         | 200 y listado de mesas.             |
+| `POST /api/tables`             | `name`, `capacity` | 201 y mesa creada como `available`. |
+| `PATCH /api/tables/:id/status` | `status`           | 200 y mesa completa actualizada.    |
 
-```powershell
-npm run check
-npm run test:integration
-```
+Nombre: entre 1 y 80 caracteres después de eliminar espacios exteriores. Capacidad:
+entero de 1 a 20. ID: entero positivo. Estados: `available`, `occupied` y
+`out_of_service`. Respuestas de error: 400 para datos inválidos, 401 sin sesión,
+404 si la mesa no existe y 409 por nombre duplicado.
 
-`check` ejecuta lint, formato, tipos, pruebas de configuración/HTTP/UI y compilación.
-HTTP simula consultas de salud; UI usa JSDOM y fetch simulado. Estas pruebas no
-demuestran por sí solas persistencia ni sustituyen las pruebas de integración.
+El repositorio usa parámetros SQL. La base refuerza unicidad, capacidad y estados
+con restricciones. El servidor no devuelve SQL ni stacks; los errores internos
+incluyen un identificador de petición para relacionarlos con el registro del proceso.
 
-`test:integration` exige `TEST_DATABASE_URL` apuntando a una base distinta de la
-principal y cuyo nombre termine en `_test`. Crea un esquema aleatorio aislado,
-aplica todas las migraciones, genera un usuario y ejecuta peticiones HTTP reales.
-Al finalizar elimina solamente ese esquema. No trunca tablas existentes. La base
-de pruebas debe existir y su usuario debe poder crear esquemas; no necesita ser
-superusuario. No hace falta migrarla previamente: la suite lo hace en su esquema.
+## Interfaz
 
-Cubre login correcto/incorrecto, cookie, sesión actual, endpoints sin autenticación,
-crear/listar/cambiar los tres estados, validaciones, duplicados, inexistentes,
-revocación y caducidad. Reinicia el servidor HTTP y abre otra conexión PostgreSQL
-para verificar persistencia. No reinicia automáticamente el proceso Node ni el
-servicio PostgreSQL: comprueba además de forma manual crear una mesa en modo API,
-recargar, detener `npm run dev`, volver a arrancarlo y confirmar que continúa allí.
+El login y el panel son pantallas separadas. Los tres idiomas están disponibles
+antes y después de entrar, y la preferencia se conserva al recargar. Se usan
+`textContent` para datos externos y controles nativos con etiquetas.
 
-GitHub Actions prepara PostgreSQL 17 temporal y ejecuta ambas suites junto con las
-comprobaciones existentes. No se requiere runner propio ni publicar la aplicación.
+Las tarjetas compactas muestran nombre, capacidad, estado y selector. Los botones
+del resumen filtran las mesas; «Limpiar filtros» restablece búsqueda y estado. Las
+plazas disponibles se calculan sobre todo el salón, independientemente del filtro.
+Los dibujos de asientos se retiraron tras revisar su utilidad: aumentaban la altura
+sin facilitar el trabajo del personal.
 
-## Registro de problemas y regresiones
+Se deshabilitan los controles durante las operaciones para evitar envíos repetidos.
+Un 401 devuelve al login y cierra el diálogo de creación. Un fallo de red al salir
+muestra un error y permite reintentar, sin aparentar una revocación que no ocurrió.
+El foco vuelve al selector tras cambiar el estado si la mesa sigue visible.
 
-| Síntoma y reproducción                                              | Causa                                                                                                                  | Corrección y evidencia                                                                                            |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Login muestra etiquetas de crear mesa al cargar o cambiar idioma.   | Traducciones con selectores generales `form>label` y `form>.muted` alcanzaban primero el login.                        | Selectores limitados a `#table-form`; la prueba UI comprueba etiquetas de ambos formularios en los tres idiomas.  |
-| Login y mensajes de error provocan errores JavaScript.              | Faltaban claves de autenticación y no se procesaban atributos `data-i18n`.                                             | Diccionarios completos y aplicación de esos atributos; UI prueba login correcto/incorrecto.                       |
-| El idioma vuelve a español tras recargar.                           | Lectura de `reservet.lang` y escritura de `reservet.language`.                                                         | Una única clave; UI vuelve a importar el módulo y comprueba la preferencia.                                       |
-| No se puede cambiar idioma antes de autenticarse.                   | Selector dentro del panel oculto.                                                                                      | Se mueve el mismo control a la pantalla activa; UI comprueba su presencia en el login.                            |
-| Login queda tapado tras caducar sesión al crear mesa.               | El diálogo modal permanece abierto al ocultar el panel.                                                                | Se cierra al mostrar login; prueba UI simula 401 con diálogo abierto.                                             |
-| Cerrar sesión aparenta funcionar aunque falle la red.               | Se ignoraba el error y se ocultaba el panel siempre.                                                                   | Se muestra error y se permite reintentar; UI cubre fallo y éxito.                                                 |
-| Disposición del panel y login incorrecta tras añadir autenticación. | El contenedor nuevo interrumpió el flex del body; reglas del formulario apuntaban a un formulario anidado inexistente. | Flex en el panel, columna móvil y grid en el formulario real. Pendiente revisión visual manual en varios tamaños. |
-| Un ID positivo superior al rango integer de PostgreSQL provoca 500. | Se aceptaba un entero seguro de JavaScript que excede el rango de la columna.                                          | Se trata como mesa inexistente antes de consultar PostgreSQL; integración cubre este límite.                      |
-| `npm run check` fallaba por formato.                                | CSS sin formatear.                                                                                                     | Se aplica Prettier y se ejecuta de nuevo la verificación completa.                                                |
+## Errores encontrados y correcciones
 
-## Identidad visual
+| Síntoma y reproducción                                                             | Causa                                                                   | Corrección                                        | Regresión                                                                               |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Cargar el login o cambiar de idioma mostraba etiquetas de crear mesa.              | Selectores generales `form>label` y `form>.muted` alcanzaban el login.  | Se limitaron a `#table-form`.                     | UI comprueba etiquetas de ambos formularios en los tres idiomas.                        |
+| Un login incorrecto podía provocar un error JavaScript en vez de un mensaje.       | Faltaban traducciones de autenticación y la aplicación de `data-i18n`.  | Se completaron los diccionarios y sus bindings.   | UI prueba login incorrecto y correcto.                                                  |
+| Elegir un idioma y recargar volvía a español.                                      | Se leía `reservet.lang` y se escribía `reservet.language`.              | Se usa una única clave.                           | UI vuelve a importar el módulo y verifica el idioma recuperado.                         |
+| Antes de iniciar sesión no se podía cambiar idioma.                                | El selector estaba dentro del panel oculto.                             | El mismo control se mueve a la pantalla activa.   | UI comprueba su presencia en el login.                                                  |
+| Caducar la sesión al crear una mesa dejaba el login tapado.                        | El diálogo modal seguía abierto.                                        | Se cierra al mostrar el login.                    | UI simula 401 con el diálogo abierto.                                                   |
+| Desconectar la red y salir ocultaba el panel como si el logout hubiera funcionado. | El error de red se ignoraba.                                            | Se muestra el error y se permite reintentar.      | UI cubre error de red y salida correcta.                                                |
+| El panel perdía su distribución tras añadir el contenedor de autenticación.        | El nuevo contenedor interrumpía el flex del body.                       | Se define el flex en el panel y la columna móvil. | Comprobaciones de estructura; alcance de revisión visual en el informe de verificación. |
+| Pedir el ID `2147483648` devolvía 500.                                             | El entero seguro de JavaScript superaba el rango integer de PostgreSQL. | Se responde 404 sin enviar ese ID a SQL.          | Integración verifica el límite.                                                         |
+| Cambiar estado con teclado perdía el foco.                                         | Al renderizar se sustituía el selector enfocado.                        | Se recupera el foco si la mesa continúa visible.  | UI verifica el selector activo después del cambio.                                      |
 
-El diseño combina verde bosque, fondo cálido y tipografía editorial en los títulos.
-El login incluye un plano decorativo del salón hecho con HTML/CSS, sin imágenes,
-fuentes remotas ni dependencias adicionales. En móvil se simplifica para priorizar
-el formulario; se respeta la preferencia de movimiento reducido del sistema.
+## Pruebas y aislamiento
 
-Las tarjetas dibujan exactamente un asiento por plaza y usan texto y color para
-identificar el estado. Un resumen calcula las mesas y plazas disponibles del salón
-completo, independientemente de los filtros. Las pruebas UI comprueban ambos
-cálculos y la cantidad de asientos en los tres idiomas. Se revisaron visualmente
-login y panel a anchos de escritorio (1440 px) y móvil (390 px), incluido el panel
-en ruso. Esta revisión completa la comprobación de distribución indicada arriba.
+`npm run check` ejecuta lint, formato, tipos, pruebas y compilación. Las pruebas UI
+usan JSDOM y fetch simulado. Las pruebas HTTP simulan consultas de salud; no son
+una demostración de persistencia.
 
-## Uso de IA y límites
+`npm run test:integration` compila y utiliza `TEST_DATABASE_URL`. Exige una base
+terminada en `_test`, distinta de la principal. Cada suite crea un esquema aleatorio,
+aplica migraciones y elimina solo ese esquema al finalizar. No trunca tablas existentes.
+Su usuario debe poder crear esquemas; no necesita privilegios de superusuario.
 
-Se utilizó Codex para revisar el enunciado y el código, diagnosticar la mezcla de
-formularios, corregir autenticación/interfaz, diseñar el login y las tarjetas,
-ampliar pruebas y redactar esta guía.
-Las decisiones se contrastaron con pruebas: ocultar la interfaz tras un logout
-fallido no demuestra revocación. Se corrigió ese comportamiento y se añadió una
-regresión que exige mostrar el error y conservar la posibilidad de reintentar.
-La persona candidata debe revisar y poder explicar el código y estas decisiones.
+La integración cubre login, sesión actual, cookies, protección, creación, listado,
+estados, validaciones, límites, duplicados, inexistentes, revocación y caducidad.
+`restart.test.js` ejecuta dos veces las migraciones y el seed, arranca el servidor
+compilado, crea y modifica una mesa, termina Node y vuelve a arrancarlo. Comprueba
+que tanto la mesa como la sesión persisten y que el logout sigue revocando el acceso.
 
-No se implementan reservas, pagos, roles avanzados ni recuperación de contraseña,
-según el alcance. Las sesiones vencidas se rechazan pero no hay limpieza programada
-de sus filas. Los tres idiomas están disponibles tanto en login como en mesas.
+## Uso de IA
 
-## Pendientes de publicación y entrega
+Utilicé Codex como apoyo para revisar código, localizar el fallo de formularios,
+explorar el diseño, ampliar pruebas y ordenar la documentación.
 
-La carpeta revisada no tiene commits ni remotos configurados. Antes de entregar,
-recupera el historial del repositorio original mediante un clon y traslada tus
-cambios a una rama propia; no basta con publicar esta carpeta como historial nuevo.
-Conserva `.env` exclusivamente local y excluido de Git.
+Una decisión corregida fue ocultar el panel ante cualquier resultado del logout.
+Se contrastó con el caso de un fallo de red: ocultar la pantalla no demuestra que
+el servidor haya revocado la sesión. Se cambió el comportamiento y se añadió una
+prueba que comprueba el error, el reintento y la salida correcta.
 
-- Publicar en tu propio GitHub, nunca en el del evaluador.
-- Abrir y revisar PR propio e integrarlo a la rama final.
-- Confirmar una ejecución verde de **Verificaciones** en GitHub.
-- Clonar en otra carpeta y seguir esta guía desde cero.
-- Adjuntar URL del repositorio, rama final, SHA, PR y CI verde.
-- Recomendado: probar también con teclado y en un teléfono físico antes de entregar.
+## Límites del alcance
 
-La ejecución local de CI no constituye una ejecución publicada en GitHub. No se han
-creado enlaces ni commits como parte de esta revisión.
+No se incluyen reservas, pagos, inventario, roles avanzados, recuperación de
+contraseña ni deployment. Las sesiones caducadas se rechazan, pero no existe una
+tarea programada que elimine sus filas. El modo demostración conserva cambios en
+memoria; la persistencia corresponde al modo API.

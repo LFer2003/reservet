@@ -1,55 +1,38 @@
-# Reservet · Junior technical assessment
+# Reservet · Table management
 
 [Español](README.md) · **English** · [Русский](README.ru.md)
 
-Complete an application for restaurant staff: **login, table management and
-PostgreSQL persistence**. Work locally, publish the solution on **your own GitHub**
-and submit its URL with reproducible instructions.
+Restaurant staff application with authentication, table management and PostgreSQL
+persistence. Implementation of the Reservet junior technical assessment.
 
-This README defines the required scope. The evaluator communicates the deadline;
-document incomplete tasks. Additional stages in the learning guides are outside
-this assessment.
+[Repository](https://github.com/LFer2003/reservet) ·
+[GitHub checks](https://github.com/LFer2003/reservet/actions/workflows/ci.yml) ·
+[Detailed implementation notes, Spanish](docs/ENTREGA.md) · [Original assessment, Spanish](docs/ENUNCIADO.md)
 
-## 1. Starting point and scope
+## Features
 
-Included: TypeScript/Express, PostgreSQL connection and migrations, table schema,
-a Spanish/English/Russian interface with demo/API modes and basic tests.
+- Login, current session and logout with server-side revocation; scrypt passwords.
+- Persistent PostgreSQL sessions with an eight-hour expiry.
+- Create and list tables; available, occupied and out-of-service statuses.
+- Case-insensitive search, summary buttons that filter tables and clear filters.
+- Compact cards showing table name, capacity, status and a status selector.
+- Available table/seat totals, responsive layout and Spanish/English/Russian UI.
+- Persistent API mode and an explicitly temporary in-memory demonstration mode.
 
-Implement authentication, protect table endpoints, list/create/change statuses,
-connect the interface, add tests and document the solution. Login does not exist
-yet: you must build it.
+## Local setup
 
-**Docker, AWS/SQS, Cloudflare, runners, domains and deployment are not required.**
-Neither are reservations, payments, inventory or password recovery. The original
-repository's infrastructure is the evaluator's responsibility, not the candidate's.
-
-## 2. Your repository
-
-Create an empty GitHub repository without generating another README. Preserve the
-project history and change the push destination:
+Requires Git, Node.js 22.13 or a compatible newer version, npm and PostgreSQL 17.
+Docker and deployment are not required.
 
 ```powershell
-git clone https://github.com/Eddierh/reservet.git reservet-assessment
-cd reservet-assessment
-git remote rename origin upstream
-git remote add origin https://github.com/YOUR_USERNAME/reservet-technical-assessment.git
-git push -u origin main
-git switch -c feat/technical-test
+git clone https://github.com/LFer2003/reservet.git
+cd reservet
+npm ci
+# Only if .env does not exist:
+Copy-Item .env.example .env
 ```
 
-Replace the username and repository name. Make small commits on your branch.
-Do not push or submit PRs to the original repository. If your repository is private,
-give the evaluator access before submission.
-
-## 3. Local setup without Docker
-
-Install Git, Node.js **22.13 or later compatible with the dependencies**, and
-PostgreSQL **17** directly on your computer. Check `git --version`, `node --version`,
-`npm --version` and `psql --version`. If psql is not on PATH, use SQL Shell or
-pgAdmin's query tool.
-
-Connect to your local PostgreSQL as an administrator and execute these statements
-**separately**, with autocommit enabled; CREATE DATABASE cannot run in a transaction:
+As a PostgreSQL administrator, execute each statement separately with autocommit:
 
 ```sql
 CREATE ROLE reservet_candidate LOGIN PASSWORD 'local_candidate_password';
@@ -57,196 +40,74 @@ CREATE DATABASE reservet_candidate OWNER reservet_candidate;
 CREATE DATABASE reservet_candidate_test OWNER reservet_candidate;
 ```
 
-Use different names if they already exist. The app user does not need superuser
-permissions. The `_test` database is exclusively for testing. Do not connect to
-the original project's dev/pro databases.
-
-```powershell
-npm ci
-# Only if .env does not exist:
-Copy-Item .env.example .env
-```
-
-Adjust `.env` to your installation:
+These are local example credentials. Use different names if they already exist;
+the application user does not need superuser privileges. Adjust `.env`:
 
 ```dotenv
 PORT=3000
+HOST=127.0.0.1
+APP_ENV=dev
 DATABASE_URL=postgresql://reservet_candidate:local_candidate_password@localhost:5432/reservet_candidate
+TEST_DATABASE_URL=postgresql://reservet_candidate:local_candidate_password@localhost:5432/reservet_candidate_test
 ```
 
-The original example uses **5433** for Docker; a direct PostgreSQL installation
-usually uses **5432**. Use your actual port and URL-encode special password
-characters. Do not commit `.env` or real credentials.
+Use your actual port and credentials, URL-encode special password characters and
+keep `.env` out of Git. The test database must differ from the application database
+and its name must end in `_test`.
 
 ```powershell
 npm run db:migrate
+$env:SEED_USERNAME = 'demo'
+$env:SEED_PASSWORD = Read-Host 'Choose a local password of at least 12 characters'
+npm run db:seed-user
+Remove-Item Env:SEED_PASSWORD
 npm run dev
 ```
 
-Open **http://localhost:3000** and check in another terminal:
+The repeatable seed creates the user or updates its password. There is no public
+registration or universal password in the repository.
+
+Open [http://localhost:3000](http://localhost:3000), sign in and choose **My local API**
+to verify persistence. Demonstration changes disappear on reload.
+`/health` should report `status: ok`, and `/health/db` should report `database: connected`.
+For a compiled run, use `npm run build` followed by `npm start`.
+
+## Verification
 
 ```powershell
-Invoke-RestMethod http://localhost:3000/health
-Invoke-RestMethod http://localhost:3000/health/db
-```
-
-Expect `status: ok` and `database: connected`. Select **My local API** to test
-your backend. Initially `/api/tables` returns 404: you must implement it.
-Demo mode only uses memory and does not demonstrate persistence. Do not use
-`npm run db:up` or `npm run db:down`: these are Docker commands.
-
-## 4. Required tasks
-
-### A. Authentication
-
-- Add user migrations and a repeatable seed command or procedure for a test user.
-  Never commit real passwords.
-- Implement login, logout and current-session lookup. Choose sessions or tokens
-  and explain expiration and revocation behavior on logout.
-- Hash passwords with scrypt, bcrypt or Argon2; never store plaintext or use a
-  plain SHA-256 hash. Invalid login: 401 and a generic message.
-- Protect **all table endpoints on the server**: unauthenticated requests return 401. Hiding interface buttons is insufficient.
-- Build a login screen and logout action; preserve all three languages and the
-  selector. Public signup, email and advanced roles are not required.
-- Document new variables with examples in `.env.example`. Health routes may stay
-  public without exposing secrets.
-
-### B. Table API
-
-| Method and route               | Input                                  | Result                                        |
-| ------------------------------ | -------------------------------------- | --------------------------------------------- |
-| `GET /api/tables`              | No body                                | 200 and array of tables                       |
-| `POST /api/tables`             | `{ "name": "Table 1", "capacity": 4 }` | 201 and created table with status `available` |
-| `PATCH /api/tables/:id/status` | `{ "status": "occupied" }`             | 200 and complete updated table                |
-
-Each table includes positive integer `id`, `name`, integer `capacity` and `status`.
-Validate nonblank names up to 80 characters, capacity **1–20**, positive IDs and
-statuses `available`, `occupied`, `out_of_service`.
-
-Invalid input: **400**; missing table: **404**; duplicate name: **409**;
-unauthenticated: **401**. Use parameterized SQL and database constraints. Never
-return SQL queries, passwords or stack traces to clients.
-
-### C. Architecture and interface
-
-- Separate routes, services and repositories: HTTP, business rules and SQL have
-  different responsibilities.
-- Add migrations without editing applied ones. Setup must work from an empty
-  database with documented commands and no hidden manual changes.
-- Connect the existing list, form, filters and status selectors. Show loading
-  and errors, prevent duplicate submissions and render external text safely.
-  Validate on the server even if the browser already validates.
-- API-mode tables must survive reloads and server restarts. Demo mode must not
-  hide backend failures.
-- If using cookies, keep the same origin and document their security settings.
-- Search must be case-insensitive and the selected language must survive reloads.
-
-### D. Tests and quality
-
-Test valid/invalid login, unauthenticated access, logout for your chosen mechanism,
-table creation/listing/status changes, validation, duplicates and missing tables.
-Verify persistence against the `_test` database, never by deleting working data.
-
-Included tests use mocks/JSDOM and do not cover your business backend. Document
-test database configuration, migrations, commands and what is simulated. If you
-need `TEST_DATABASE_URL`, explain it and provision a temporary database for
-integration tests in your CI. Do not disable existing checks.
-
-```powershell
-npm run format
 npm run check
+npm run test:integration
 ```
 
-`check` runs lint, formatting, types, tests and build. **Verificaciones** must pass
-in your GitHub repository. Deployment is restricted to the original repository
-and skipped in candidate copies: you do not need a runner.
+`check` runs lint, formatting, TypeScript, configuration/HTTP/UI tests and the build.
+`npm test` uses JSDOM and mocked fetch/health queries, without a real database.
+Integration tests require `TEST_DATABASE_URL`; they create an isolated random schema,
+apply migrations and remove only that schema. They cover login, protected endpoints,
+table operations, validation, conflicts, missing tables, logout, expiry and persistence
+after an HTTP server restart, a full Node process restart and through another database connection. Migrations and the user seed are also run twice to verify repeatability. The database
+user needs permission to create schemas; no separate test migration command is needed.
+GitHub Actions provisions PostgreSQL 17 and runs both suites plus existing checks.
 
-## 5. Suggested workflow and publication
+## Design and security
 
-1. Set up PostgreSQL and check `/health/db`.
-2. Implement and test tables on your branch.
-3. Add users, seed, login and module protection.
-4. Connect the interface, verify all three languages and complete tests.
-5. Run all checks and follow your setup instructions from scratch.
-6. Push your branch, open a PR **in your own repository**, review it and merge
-   into its default branch so the final solution is easy to find.
+HTTP routes, business services and SQL repositories are separated in
+`src/modules/auth/` and `src/modules/tables/`. The UI lives in `public/`.
+Random session tokens are stored as hashes in PostgreSQL and sent in an `HttpOnly`,
+`SameSite=Lax` cookie lasting eight hours. `Secure` is enabled with `APP_ENV=pro`;
+local development uses same-origin HTTP. Logout deletes the server session and cookie.
+All table routes require authentication. Inputs are validated server-side; SQL is
+parameterized, database constraints apply and external text uses `textContent`.
 
-```powershell
-git add <files-you-changed>
-git commit -m "feat: describe your implemented change"
-git push -u origin feat/technical-test
-```
+Compact cards prioritize operating the dining room over decorative table drawings.
+Codex assisted with review, debugging, design, tests and documentation. A corrected
+AI-assisted decision was hiding the UI after a failed logout: the UI now reports
+the error and allows retrying, with regression coverage. See the detailed Spanish
+notes for problem reproductions, causes, corrections and tests.
 
-## 6. Evaluation
+## Scope
 
-### AI use and delivery explanation
-
-- **You may use AI to code, research, debug and write tests.** Identify the tools
-  used and the parts where they helped.
-- You are responsible for understanding, reviewing and verifying all submitted
-  code, including generated code. Do not share secrets or personal data with tools.
-- Provide a written explanation of login → authenticated request → service →
-  PostgreSQL, your decisions and how you verified the result.
-- Describe an AI suggestion you corrected or rejected and why. If none occurred,
-  explain a decision you checked against documentation or tests.
-- Full conversation histories are not required. An explanatory video is optional;
-  **there will be no live coding exercises or live changes with the evaluator**.
-
-### Review the starting code
-
-The starter may contain functional defects. Reviewing it and correcting issues
-you find is part of the assessment. Included checks do not guarantee every
-behavior is correct: extend tests without disabling existing ones.
-
-Do not stop at the happy path: check boundaries, failures and behavior after
-reload. For each issue, document **symptom, reproduction, root cause, fix
-and regression test**. Explain the evidence rather than merely stating AI fixed it.
-
-### Criteria
-
-| Criterion     | Evidence                                                              |
-| ------------- | --------------------------------------------------------------------- |
-| Functionality | Login and tables using real PostgreSQL                                |
-| Design        | Clear responsibilities and explained decisions                        |
-| Security      | Password hashing, server protection, validation and parameterized SQL |
-| Tests         | Reproducible success, failure and persistence cases                   |
-| Delivery      | Understandable commits, passing CI and complete instructions          |
-
-Be ready to explain your code and any tools or assistance used. Reservations,
-SQS, microservices and deployment are not requirements or substitutes for required tasks.
-
-## 7. Submission
-
-Submit through the same channel where you received the assessment:
-
-- **Your repository URL**, accessible to the evaluator, final branch and commit SHA.
-- Your repository's PR URL and a successful CI run URL.
-- A README covering installation, PostgreSQL, variables, migrations, seed,
-  startup and commands for every test suite.
-- **Local demo-only credentials**, or instructions to generate them. Never
-  share personal keys or secrets from other environments.
-- Decisions, incomplete tasks and limitations. Screenshots/video are optional
-  and do not replace code and instructions.
-- An AI-use section and a log of discovered issues, explanations and added tests.
-
-```text
-Repository: https://github.com/YOUR_USERNAME/reservet-technical-assessment
-Final branch and commit:
-Pull request:
-CI:
-Run instructions: section in my README
-Test user: documented seed procedure
-Completed / pending:
-```
-
-Before submitting, clone your repository elsewhere and follow your own instructions.
-Review must not depend on your `.env`, files outside the repository or access to our PC.
-
-## References and administration
-
-[Architecture](docs/en/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.en.md) ·
-[Learning guide](docs/en/JUNIOR_GUIDE.md).
-Reservations/SQS stages are future training. Some historical guides use Docker:
-follow this README's local setup for the assessment.
-The [deployment guide for your projects](docs/en/DEPLOYMENT.md) is optional learning:
-use your own resources; it is not part of the assessment delivery.
+The application covers authentication and table management. Reservations, payments,
+inventory, advanced roles, password recovery and deployment are outside the assessment.
+Expired sessions are rejected; their rows are not removed by a scheduled cleanup job.
+See the [delivery verification report, Spanish](docs/VERIFICACION.md) for the
+requirements review and recorded validation evidence.

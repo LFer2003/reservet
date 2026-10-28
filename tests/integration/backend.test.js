@@ -127,6 +127,19 @@ test('autenticación, mesas y persistencia con PostgreSQL real', async (t) => {
         400,
       );
     });
+    await t.test('acepta nombres de 80 caracteres y capacidades límite', async () => {
+      for (const [name, capacity] of [
+        ['x'.repeat(80), 1],
+        ['Capacidad máxima', 20],
+      ]) {
+        const response = await request('/tables', 'POST', { name, capacity });
+        assert.equal(response.status, 201);
+        const table = await response.json();
+        assert.equal(table.name, name);
+        assert.equal(table.capacity, capacity);
+        assert.equal(table.status, 'available');
+      }
+    });
     await t.test(
       'mesas y sesión sobreviven al reinicio del servidor HTTP y a otra conexión',
       async () => {
